@@ -1,7 +1,6 @@
 package pl.kurs.personapp.controllers;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -11,13 +10,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import pl.kurs.personapp.dto.EmployeeDto;
+import pl.kurs.personapp.dto.ImportStatusDto;
+import pl.kurs.personapp.dto.ImportStatusSimpleDto;
 import pl.kurs.personapp.dto.PersonDto;
 import pl.kurs.personapp.models.*;
 import pl.kurs.personapp.services.*;
 import java.text.ParseException;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 @RestController
@@ -25,21 +25,21 @@ import java.util.stream.Collectors;
 public class PersonController {
 
     private ModelMapper mapper;
-    private ObjectMapper objectMapper;
     private PersonManagementService personManagementService;
     private PersonFactoryService personFactoryService;
     private EmployeePositionsService employeePositionsService;
     private CsvImportService csvImportService;
+    private ImportStatusManagementService importStatusManagementService;
 
-    public PersonController(ModelMapper mapper, ObjectMapper objectMapper, PersonManagementService personManagementService,
+    public PersonController(ModelMapper mapper, PersonManagementService personManagementService,
                             PersonFactoryService personFactoryService, EmployeePositionsService employeePositionsService,
-                            CsvImportService csvImportService) {
+                            CsvImportService csvImportService, ImportStatusManagementService importStatusManagementService) {
         this.mapper = mapper;
-        this.objectMapper = objectMapper;
         this.personManagementService = personManagementService;
         this.personFactoryService = personFactoryService;
         this.employeePositionsService = employeePositionsService;
         this.csvImportService = csvImportService;
+        this.importStatusManagementService = importStatusManagementService;
     }
 
     @PostMapping
@@ -87,22 +87,35 @@ public class PersonController {
     }
 
     @PostMapping("/import")
-    public ResponseEntity<String> importCsv(@RequestParam("file") MultipartFile inputFile) {
+    public ResponseEntity<ImportStatusSimpleDto> importCsv(@RequestParam("file") MultipartFile inputFile) {
         try {
-            CompletableFuture<Void> importFuture = csvImportService.importCsvData(inputFile);
-            importFuture.get();
-            return ResponseEntity.ok("Import started");
-        } catch (Exception e) {
+            csvImportService.importCsvData(inputFile);
+            ImportStatus importStatus = csvImportService.getImportStatus();
+            ImportStatusSimpleDto statusSimpleDto = mapper.map(importStatus, ImportStatusSimpleDto.class);
+            return ResponseEntity.ok(statusSimpleDto);
+        } catch (RuntimeException e) {
             e.printStackTrace();
         }
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Import failed");
+        ImportStatus importStatus = csvImportService.getImportStatus();
+        ImportStatusSimpleDto statusSimpleDto = mapper.map(importStatus, ImportStatusSimpleDto.class);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(statusSimpleDto);
     }
 
     @GetMapping("/progress")
-    public ResponseEntity<ImportStatus> getCurrentImportState() {
+    public ResponseEntity<ImportStatusDto> getCurrentImportState() {
         ImportStatus currentStatus = csvImportService.getImportStatus();
-        return ResponseEntity.ok(currentStatus);
+        ImportStatusDto importStatusDto = mapper.map(currentStatus, ImportStatusDto.class);
+        return ResponseEntity.ok(importStatusDto);
+    }
 
+    @GetMapping("/history")
+    public ResponseEntity<PageImpl<ImportStatusDto>> getStatuses(@PageableDefault Pageable pageable) {
+        List<ImportStatus> importStatusesList = importStatusManagementService.getAll();
+        List<ImportStatusDto> importStatusDtos = importStatusesList.stream()
+                .map(x -> mapper.map(x, ImportStatusDto.class))
+                .collect(Collectors.toList());
+        PageImpl<ImportStatusDto> personDtoPage = new PageImpl<>(importStatusDtos, pageable, importStatusesList.size());
+        return ResponseEntity.status(HttpStatus.OK).body(personDtoPage);
     }
 
 }

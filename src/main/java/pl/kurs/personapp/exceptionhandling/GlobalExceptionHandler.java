@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import pl.kurs.personapp.exceptionhandling.exceptions.BadEntityException;
 import pl.kurs.personapp.exceptionhandling.exceptions.BadPositionException;
+import pl.kurs.personapp.exceptionhandling.exceptions.ImportLockedException;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
@@ -42,7 +43,8 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(exceptionResponseDto);
     }
 
-    @ExceptionHandler({BadEntityException.class, IllegalArgumentException.class, StaleObjectStateException.class, BadPositionException.class})
+    @ExceptionHandler({BadEntityException.class, IllegalArgumentException.class, StaleObjectStateException.class,
+            BadPositionException.class, ImportLockedException.class})
     public ResponseEntity<ExceptionResponseDto> handleBadEntityExceptionAndIllegalArgumentException(RuntimeException e) {
         ExceptionResponseDto exceptionResponseDto = new ExceptionResponseDto(
                 List.of(e.getMessage()),

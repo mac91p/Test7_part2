@@ -1,8 +1,6 @@
 package pl.kurs.personapp.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
-import pl.kurs.personapp.models.Position;
-
 import java.sql.Date;
 import java.util.Set;
 
@@ -13,7 +11,7 @@ public class EmployeeDto extends PersonDto {
     @JsonFormat(pattern = "yyyy-MM-dd")
     private Date employmentStart;
 
-    private Set<Position> positions;
+    private Set<PositionDto> positions;
 
     public String getCurrentPosition() {
         return currentPosition;
@@ -39,11 +37,11 @@ public class EmployeeDto extends PersonDto {
         this.employmentStart = employmentStart;
     }
 
-    public Set<Position> getPositions() {
+    public Set<PositionDto> getPositions() {
         return positions;
     }
 
-    public void setPositions(Set<Position> positions) {
+    public void setPositions(Set<PositionDto> positions) {
         this.positions = positions;
     }
 }

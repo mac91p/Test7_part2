@@ -7,22 +7,23 @@ import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.test.web.servlet.result.MockMvcResultHandlers;
+import static org.mockito.Mockito.*;
 import static org.hamcrest.Matchers.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import pl.kurs.personapp.models.Employee;
+import pl.kurs.personapp.models.ImportStatus;
 import pl.kurs.personapp.models.Pensioner;
 import pl.kurs.personapp.models.Position;
-import pl.kurs.personapp.services.CsvImportService;
-import pl.kurs.personapp.services.EmployeePositionsService;
-import pl.kurs.personapp.services.PersonFactoryService;
-import pl.kurs.personapp.services.PersonManagementService;
+import pl.kurs.personapp.services.*;
 import java.sql.Date;
+import java.time.Instant;
 import java.util.LinkedHashSet;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -44,6 +45,10 @@ class PersonControllerTest {
     private EmployeePositionsService employeePositionsService;
     @Autowired
     private CsvImportService csvImportService;
+    @Autowired
+    private ImportStatusManagementService importStatusManagementService;
+    @MockBean
+    private ImportLockService importLockService;
 
 
     @BeforeAll
@@ -55,7 +60,8 @@ class PersonControllerTest {
         employee.getPositions().add(position);
         personManagementService.add(pensioner);
         personManagementService.add(employee);
-
+        ImportStatus importStatus = new ImportStatus(ImportStatus.State.RUNNING, Instant.now(), Instant.now(), 10);
+        importStatusManagementService.add(importStatus);
     }
 
 
@@ -107,27 +113,24 @@ class PersonControllerTest {
     }
 
 
-
-
-
     @Test
     public void shouldHandleImportFailure() throws Exception {
         MockMultipartFile file = new MockMultipartFile("file", "test.csv", MediaType.TEXT_PLAIN_VALUE, "csv_content".getBytes());
 
         mockMvc.perform(MockMvcRequestBuilders.multipart(
                 "/api/person/import").file(file))
-                .andExpect(status().isInternalServerError())
-                .andExpect(content().string("Import failed"));
+                .andExpect(status().isInternalServerError());
     }
 
     @Test
     public void shouldImportCsvSuccessfully() throws Exception {
+
         String csvContent = "student,Marcin,Wawrzyk,00062275110,178,85,marwaw@gmail.com,AGH,3,Economics,1400";
         MockMultipartFile file = new MockMultipartFile("file", "test.csv", MediaType.TEXT_PLAIN_VALUE, csvContent.getBytes());
 
+        when(importLockService.tryAcquireImportLock()).thenReturn(true);
         mockMvc.perform(MockMvcRequestBuilders.multipart("/api/person/import").file(file))
-                .andExpect(status().isOk())
-                .andExpect(content().string("Import started"));
+                .andExpect(status().isOk());
     }
 
 
@@ -149,12 +152,20 @@ class PersonControllerTest {
                 .andExpect(jsonPath("$.heightInCm").value(182));
     }
 
-
-
-
-
+    @Test
+    public void shouldGetImportStatusHistory() throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders
+                .get("/api/person/history")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andDo(MockMvcResultHandlers.print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").exists())
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath("$.content", hasSize(equalTo(1))));
+    }
 
 }
+
 
 
 
